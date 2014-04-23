@@ -366,10 +366,27 @@ void fuse_teardown(struct fuse *fuse, int fd, char *mountpoint)
     free(mountpoint);
 }
 
+cat_t ar = 0b00000110;
+cat_t aw = 0b11100000;
+
 static int fuse_main_common(int argc, char *argv[],
                             const struct fuse_operations *op, size_t op_size,
                             int compat)
 {
+    //arbiter settings init
+    absys_thread_control(AB_SET_ME_SPECIAL);
+    init_client_state(NULL, NULL);
+    AB_INFO("Hello Arbiter!\n");
+    AB_INFO("FUSE main(): pid %d forked by arbiter!\n", getpid());
+    label_t L1 = {ar, aw};
+    label_t L2 = {};
+    void *addr;
+    size_t s = 1024*1024;
+    addr = ab_malloc(s, L2);
+    AB_DBG("main(): ab_malloc(%d)=%p\n", s, addr);
+    *(unsigned long *)addr = 0xdeadbeef;
+    AB_DBG("main(): debug point 1: *addr=%lx\n", *(unsigned long *)addr);
+
     struct fuse *fuse;
     char *mountpoint;
     int multithreaded;

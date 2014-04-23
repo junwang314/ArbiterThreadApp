@@ -8,7 +8,8 @@ libfuse_la_SOURCES = 	\
 	helper.c	\
 	mount.c		\
 	fuse_i.h	\
-	fuse_kernel_compat5.h
+	fuse_kernel_compat5.h \
+	$(AB_ROOT)/client_module/lib_client.c
 
 libfuse_la_LDFLAGS = -lpthread -version-number 2:3:0 \
 	-Wl,--version-script,fuse_versionscript

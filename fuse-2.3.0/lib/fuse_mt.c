@@ -62,25 +62,25 @@ static void *do_work(void *data)
         if (cmd == NULL)
             continue;
 
-        if (f->numavail == 0 && f->numworker < FUSE_MAX_WORKERS) {
-            pthread_mutex_lock(&f->worker_lock);
-            if (f->numworker < FUSE_MAX_WORKERS) {
-                /* FIXME: threads should be stored in a list instead
-                   of an array */
-                int res;
-                pthread_t *thread_id = &w->threads[f->numworker];
-                f->numavail ++;
-                f->numworker ++;
-                pthread_mutex_unlock(&f->worker_lock);
-                res = start_thread(w, thread_id);
-                if (res == -1) {
-                    pthread_mutex_lock(&f->worker_lock);
-                    f->numavail --;
-                    pthread_mutex_unlock(&f->worker_lock);
-                }
-            } else
-                pthread_mutex_unlock(&f->worker_lock);
-        }
+        //if (f->numavail == 0 && f->numworker < FUSE_MAX_WORKERS) {
+        //    pthread_mutex_lock(&f->worker_lock);
+        //    if (f->numworker < FUSE_MAX_WORKERS) {
+        //        /* FIXME: threads should be stored in a list instead
+        //           of an array */
+        //        int res;
+        //        pthread_t *thread_id = &w->threads[f->numworker];
+        //        f->numavail ++;
+        //        f->numworker ++;
+        //        pthread_mutex_unlock(&f->worker_lock);
+        //        res = start_thread(w, thread_id);
+        //        if (res == -1) {
+        //            pthread_mutex_lock(&f->worker_lock);
+        //            f->numavail --;
+        //            pthread_mutex_unlock(&f->worker_lock);
+        //        }
+        //    } else
+        //        pthread_mutex_unlock(&f->worker_lock);
+        //}
 
         w->proc(w->f, cmd, w->data);
     }

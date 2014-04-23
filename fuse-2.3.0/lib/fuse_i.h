@@ -13,6 +13,12 @@
 #include "fuse.h"
 #include <pthread.h>
 
+#include <ab_api.h>
+#include <ab_os_interface.h>
+#include <abthread_protocol.h>
+#include <lib_client.h>
+#include "ab_debug.h"
+
 typedef unsigned long nodeid_t;
 
 struct fuse {
