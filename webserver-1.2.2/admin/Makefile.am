@@ -1,6 +1,6 @@
 ## Cherokee: Makefile.am  -*- makefile -*-
 
-SUBDIRS = market plugins wizards CTK icons
+SUBDIRS = market plugins wizards icons
 
 if INSTALL_ADMIN
 SUBDIRS += static

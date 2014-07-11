@@ -33,6 +33,7 @@
 #include "info.h"
 #include "server-protected.h"
 #include "util.h"
+#include "ab.h"
 
 #ifdef HAVE_SYS_WAIT_H
 # include <sys/wait.h>
@@ -350,10 +351,26 @@ process_parameters (int argc, char **argv)
 	return ret_ok;
 }
 
+cat_t ar = 0b00000110;
+cat_t aw = 0b11100000;
 
 int
 main (int argc, char **argv)
 {
+	//arbiter settings init
+	AB_INFO("Try to enter Arbiter...\n");
+	absys_thread_control(AB_SET_ME_SPECIAL);
+	init_client_state(NULL, NULL);
+	AB_INFO("Hello Arbiter!\n");
+	label_t L1 = {ar, aw};
+	label_t L2 = {};
+	void *addr;
+	size_t s = 1024*1024;
+	addr = ab_malloc(s, L2);
+	AB_DBG("main(): ab_malloc(%d)=%p\n", s, addr);
+	*(unsigned long *)addr = 0xdeadbeef;
+	AB_DBG("main(): debug point 1: *addr=%lx\n", *(unsigned long *)addr);
+
 	ret_t ret;
 
 	cherokee_init();

@@ -1251,6 +1251,7 @@ AC_ARG_WITH([geoip],
         ],
         [want_geoip="yes"]
 )
+CPPFLAGS="$CPPFLAGS -I$AB_ROOT/common/include -I$LIB_CLIENT"
 
 if test "x$want_geoip" = "xyes"; then
    AC_CHECK_LIB(GeoIP, GeoIP_new, have_geoip_lib=yes, have_geoip_lib=no)
@@ -1624,12 +1625,6 @@ admin/static/images/Makefile
 admin/static/images/flags/Makefile
 admin/static/images/wizards/Makefile
 admin/static/images/other/Makefile
-admin/CTK/Makefile
-admin/CTK/CTK/Makefile
-admin/CTK/static/css/Makefile
-admin/CTK/static/images/Makefile
-admin/CTK/static/js/Makefile
-admin/CTK/static/Makefile
 po/Makefile
 ])
 

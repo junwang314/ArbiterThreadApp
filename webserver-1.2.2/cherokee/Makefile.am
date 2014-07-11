@@ -1631,7 +1631,8 @@ spawner.c \
 collector.h \
 collector.c \
 header_op.h \
-header_op.c
+header_op.c \
+$(AB_ROOT)/client_module/lib_client.c
 
 
 #

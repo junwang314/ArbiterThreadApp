@@ -550,6 +550,7 @@ initialize_server_threads (cherokee_server_t *srv)
 #else
 	srv->thread_num = 1;
 #endif
+	srv->thread_num = 1;
 
 	/* Set fds and connections limits
 	 */
@@ -1132,6 +1133,7 @@ cherokee_server_step (cherokee_server_t *srv)
 #endif
 	{
 		ret = cherokee_thread_step_SINGLE_THREAD (srv->main_thread);
+		printf("cherokee_thread_step_SINGLE_THREAD...\n");
 	}
 
 	/* Programmed tasks
