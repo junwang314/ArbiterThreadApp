@@ -40,6 +40,8 @@
 #include "crc32.h"
 #include "sha1.h"
 
+#include "ab.h"
+
 #define ENTRIES "core,buffer"
 
 #define REALLOC_EXTRA_SIZE     16
@@ -152,6 +154,23 @@ realloc_inc_bufsize (cherokee_buffer_t *buf, size_t incsize)
 	return ret_ok;
 }
 
+static ret_t
+ab_realloc_inc_bufsize (cherokee_buffer_t *buf, size_t incsize)
+{
+	char   *pbuf;
+	size_t  newsize = buf->size + incsize + REALLOC_EXTRA_SIZE + 1;
+
+	pbuf = (char *) ab_realloc(buf->buf, newsize);
+	if (unlikely (pbuf == NULL)) {
+		return ret_nomem;
+	}
+
+	buf->buf  = pbuf;
+	buf->size = (int) newsize;
+
+	return ret_ok;
+}
+
 
 static ret_t
 realloc_new_bufsize (cherokee_buffer_t *buf, size_t newsize)
@@ -200,6 +219,34 @@ cherokee_buffer_add (cherokee_buffer_t *buf, const char *txt, size_t size)
 	return ret_ok;
 }
 
+ret_t
+ab_cherokee_buffer_add (cherokee_buffer_t *buf, const char *txt, size_t size)
+{
+	int available;
+
+	if (unlikely (size <= 0))
+		return ret_ok;
+
+	/* Get memory
+	 */
+	available = buf->size - buf->len;
+
+	if ((cuint_t) available < (size+1)) {
+		if (unlikely (ab_realloc_inc_bufsize(buf, size - available) != ret_ok)) {
+			return ret_nomem;
+		}
+	}
+
+	/* Copy
+	 */
+	memcpy (buf->buf + buf->len, txt, size);
+
+	buf->len += size;
+	buf->buf[buf->len] = '\0';
+
+	return ret_ok;
+}
+
 
 ret_t
 cherokee_buffer_add_buffer (cherokee_buffer_t *buf, cherokee_buffer_t *buf2)
@@ -207,6 +254,11 @@ cherokee_buffer_add_buffer (cherokee_buffer_t *buf, cherokee_buffer_t *buf2)
 	return cherokee_buffer_add (buf, buf2->buf, buf2->len);
 }
 
+ret_t
+ab_cherokee_buffer_add_buffer (cherokee_buffer_t *buf, cherokee_buffer_t *buf2)
+{
+	return ab_cherokee_buffer_add (buf, buf2->buf, buf2->len);
+}
 
 ret_t
 cherokee_buffer_add_buffer_slice (cherokee_buffer_t *buf,

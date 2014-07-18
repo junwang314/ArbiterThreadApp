@@ -53,7 +53,9 @@ cherokee_trace_init (void)
 {
 	const char        *env;
 	cherokee_buffer_t  tmp = CHEROKEE_BUF_INIT;
+	//char traceEnv[] = "all,thread";
 
+	//env = traceEnv;
 	/* Read the environment variable
 	 */
 	env = getenv (TRACE_ENV);

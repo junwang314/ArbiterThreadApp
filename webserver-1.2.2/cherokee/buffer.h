@@ -36,6 +36,8 @@
 #include <string.h>
 #include <limits.h>
 
+#include "ab.h"
+
 CHEROKEE_BEGIN_DECLS
 
 
@@ -51,6 +53,7 @@ typedef struct {
 
 #define cherokee_buffer_is_empty(b)        (BUF(b)->len == 0)
 #define cherokee_buffer_add_str(b,s)       cherokee_buffer_add (b, s, CSZLEN(s))
+#define ab_cherokee_buffer_add_str(b,s)       ab_cherokee_buffer_add (b, s, CSZLEN(s))
 #define cherokee_buffer_prepend_str(b,s)   cherokee_buffer_prepend (b, s, CSZLEN(s))
 #define cherokee_buffer_prepend_buf(b,s)   cherokee_buffer_prepend (b, (s)->buf, (s)->len)
 #define cherokee_buffer_cmp_str(b,s)       cherokee_buffer_cmp (b, (char *)s, sizeof(s)-1)
@@ -80,6 +83,7 @@ ret_t cherokee_buffer_add_va_list        (cherokee_buffer_t  *buf, const char *f
 ret_t cherokee_buffer_add_char           (cherokee_buffer_t  *buf, char c);
 ret_t cherokee_buffer_add_char_n         (cherokee_buffer_t  *buf, char c, int n);
 ret_t cherokee_buffer_add_buffer         (cherokee_buffer_t  *buf, cherokee_buffer_t *buf2);
+ret_t ab_cherokee_buffer_add_buffer         (cherokee_buffer_t  *buf, cherokee_buffer_t *buf2);
 ret_t cherokee_buffer_add_buffer_slice   (cherokee_buffer_t  *buf, cherokee_buffer_t *buf2, ssize_t begin, ssize_t end);
 ret_t cherokee_buffer_add_fsize          (cherokee_buffer_t  *buf, CST_OFFSET size);
 ret_t cherokee_buffer_prepend            (cherokee_buffer_t  *buf, const char *txt, size_t size);

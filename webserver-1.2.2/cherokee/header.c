@@ -675,7 +675,7 @@ cherokee_header_copy_request (cherokee_header_t *hdr, cherokee_buffer_t *request
 		return ret_error;
 	}
 
-	ret = cherokee_buffer_add (request, hdr->input_buffer->buf + hdr->request_off, hdr->request_len);
+	ret = ab_cherokee_buffer_add (request, hdr->input_buffer->buf + hdr->request_off, hdr->request_len);
 	if (unlikely(ret < ret_ok)) {
 		return ret;
 	}

@@ -43,7 +43,7 @@ match (cherokee_rule_t         *rule,
 	UNUSED(ret_conf);
 
 	if (cherokee_buffer_is_empty (&conn->web_directory)) {
-		cherokee_buffer_add_str (&conn->web_directory, "/");
+		ab_cherokee_buffer_add_str (&conn->web_directory, "/");
 	}
 
 	TRACE(ENTRIES, "Match default: %s\n", "ret_ok");

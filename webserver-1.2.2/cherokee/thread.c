@@ -41,6 +41,7 @@
 #include "util.h"
 #include "bogotime.h"
 #include "limiter.h"
+#include "ab.h"
 
 
 #define DEBUG_BUFFER(b)  fprintf(stderr, "%s:%d len=%d crc=%d\n", __FILE__, __LINE__, b->len, cherokee_buffer_crc32(b))
@@ -82,23 +83,30 @@ thread_update_bogo_now (cherokee_thread_t *thd)
 static NORETURN void *
 thread_routine (void *data)
 {
+	printf("new thread created!\n");
 	cherokee_thread_t *thread = THREAD(data);
 
 	/* Wait to start working
 	 */
+	printf("thread-%d: try to lock...\n", thread->thread);
 	CHEROKEE_MUTEX_LOCK (&thread->starting_lock);
+	printf("lock succeed!\n");
 
 	/* Update bogonow before start working
 	 */
+	printf("try to update bogo...\n");
 	thread_update_bogo_now (thread);
 
 	/* Step, step, step, ..
 	 */
+	printf("enter loop now...\n");
 	while (likely (thread->exit == false)) {
 		cherokee_thread_step_MULTI_THREAD (thread, false);
+		//printf("thread-%d: cherokee_thread_step_MULTI_THREAD\n", thread->thread);
 	}
 
 	thread->ended = true;
+	exit(0);
 	pthread_detach (thread->thread);
 	pthread_exit (NULL);
 }
@@ -123,7 +131,8 @@ cherokee_thread_wait_end (cherokee_thread_t *thd)
 
 	/* Wait until the thread exits
 	 */
-	CHEROKEE_THREAD_JOIN (thd->thread);
+	//CHEROKEE_THREAD_JOIN (thd->thread);
+	ab_pthread_join(thd->thread, NULL);
 	return ret_ok;
 }
 
@@ -138,9 +147,11 @@ cherokee_thread_new  (cherokee_thread_t      **thd,
 		      cint_t                  conns_max,
 		      cint_t                  keepalive_max)
 {
+	label_t L = {};
+	own_t O = {};
 	ret_t              ret;
 	cherokee_server_t *srv = SRV(server);
-	CHEROKEE_CNEW_STRUCT (1, n, thread);
+	AB_CHEROKEE_CNEW_STRUCT (1, n, thread, L);
 
 	/* Init
 	 */
@@ -213,7 +224,11 @@ cherokee_thread_new  (cherokee_thread_t      **thd,
 	/* The thread must adquire this mutex before
 	 * process its connections
 	 */
-	CHEROKEE_MUTEX_INIT (&n->ownership, CHEROKEE_MUTEX_FAST);
+	//CHEROKEE_MUTEX_INIT (&n->ownership, CHEROKEE_MUTEX_FAST);
+	pthread_mutexattr_t mattr;
+	pthread_mutexattr_init(&mattr);
+	pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED);
+	CHEROKEE_MUTEX_INIT (&n->ownership, &mattr);
 
 	/* Do some related work..
 	 */
@@ -237,12 +252,12 @@ cherokee_thread_new  (cherokee_thread_t      **thd,
 
 		/* Set the start lock
 		 */
-		CHEROKEE_MUTEX_INIT (&n->starting_lock, NULL);
+		CHEROKEE_MUTEX_INIT (&n->starting_lock, &mattr);
 		CHEROKEE_MUTEX_LOCK (&n->starting_lock);
 
 		/* Finally, create the system thread
 		 */
-		re = pthread_create (&n->thread, &attr, thread_routine, n);
+		re = ab_pthread_create (&n->thread, &attr, thread_routine, n, L, O);
 		if (unlikely (re != 0)) {
 			LOG_ERRNO (re, cherokee_err_error, CHEROKEE_ERROR_THREAD_CREATE, re);
 
@@ -629,7 +644,12 @@ process_active_connections (cherokee_thread_t *thd)
 	cherokee_connection_t    *conn        = NULL;
 	cherokee_server_t        *srv         = SRV(thd->server);
 	cherokee_socket_status_t  blocking;
-
+	
+	//if (cherokee_list_empty (&thd->active_list)) {
+	//	printf("thread-%d: process_active_connections: empty list...\n",thd->thread);
+	//} else {
+	//	printf("thread-%d: process_active_connections: active connections...\n", thd->thread);
+	//}
 #ifdef TRACE_ENABLED
 	if (cherokee_trace_is_tracing()) {
 		if (! cherokee_list_empty (&thd->active_list)) {
@@ -1443,7 +1463,7 @@ cherokee_thread_free (cherokee_thread_t *thd)
 	CHEROKEE_MUTEX_DESTROY (&thd->starting_lock);
 	CHEROKEE_MUTEX_DESTROY (&thd->ownership);
 
-	free (thd);
+	ab_free (thd);
 	return ret_ok;
 }
 
@@ -1587,6 +1607,7 @@ accept_new_connection (cherokee_thread_t *thd,
 	 */
 	re = cherokee_fdpoll_check (thd->fdpoll, S_SOCKET_FD(bind->socket), FDPOLL_MODE_READ);
 	if (re <= 0) {
+		//printf("no connection is waiting\n");
 		return ret_deny;
 	}
 
@@ -1596,6 +1617,7 @@ accept_new_connection (cherokee_thread_t *thd,
 	if ((ret != ret_ok) || (new_fd == -1)) {
 		return ret_deny;
 	}
+	printf("thread-%d: new fd accepted: %d\n", thd->thread, new_fd);
 
 	/* Information collection
 	 */
@@ -1773,6 +1795,7 @@ cherokee_thread_step_SINGLE_THREAD (cherokee_thread_t *thd)
 
 		do {
 			ret = accept_new_connection (thd, BIND(i));
+			printf("id=%d, port=%d, ret=%d\n", BIND(i)->id, BIND(i)->port, ret);
 		} while (should_accept_more (thd, BIND(i), ret) == ret_ok);
 	}
 
@@ -1805,15 +1828,18 @@ watch_accept_MULTI_THREAD (cherokee_thread_t  *thd,
 
 	/* Lock
 	 */
-	if (block) {
+	if (block) {//child thread
+		//printf("thread-%d: try lock listeners (blocking)...\n", thd->thread);
 		CHEROKEE_MUTEX_LOCK (&srv->listeners_mutex);
-	} else {
+	} else {//main thread
+		//printf("thread-%d: try lock listeners (non-block)...\n", thd->thread);
 		unlocked = CHEROKEE_MUTEX_TRY_LOCK (&srv->listeners_mutex);
 		if (unlocked) {
 			cherokee_fdpoll_watch (thd->fdpoll, fdwatch_msecs);
 			return;
 		}
 	}
+	//printf("thread-%d: lock listeners succeed!\n", thd->thread);
 
 	/* Shortcut: don't waste time on watch() */
 	if (unlikely ((srv->wanna_exit) ||
@@ -1899,11 +1925,13 @@ cherokee_thread_step_MULTI_THREAD (cherokee_thread_t  *thd,
 	cherokee_server_t *srv           = THREAD_SRV(thd);
 	int                fdwatch_msecs = srv->fdwatch_msecs;
 
+	//printf("thread-%d: try to update bogo...\n", thd->thread);
 	/* Try to update bogo_now
 	 */
 	ret = cherokee_bogotime_try_update();
 	time_updated = (ret == ret_ok);
 
+	//printf("thread-%d: try reactive...\n", thd->thread);
 	/* May have to reactive connections
 	 */
 	cherokee_limiter_reactive (&thd->limiter, thd);
@@ -1922,6 +1950,7 @@ cherokee_thread_step_MULTI_THREAD (cherokee_thread_t  *thd,
 		thd->pending_read_num = 0;
 	}
 
+	//printf("thread-%d: try reactive sleeping...\n", thd->thread);
 	/* Reactive sleeping connections
 	 */
 	fdwatch_msecs = cherokee_limiter_get_time_limit (&thd->limiter,
@@ -1953,6 +1982,7 @@ cherokee_thread_step_MULTI_THREAD (cherokee_thread_t  *thd,
 	}
 # endif
 
+	//printf("thread-%d: try to accept...\n", thd->thread);
 	/* Watch fds, and accept new connections
 	 */
 	can_block = ((dont_block == false) &&
@@ -1970,21 +2000,26 @@ out:
 		thread_update_bogo_now (thd);
 	}
 
+	//printf("thread-%d: try lock ownership...\n", thd->thread);
 	/* Adquire the ownership of the thread
 	 */
 	CHEROKEE_MUTEX_LOCK (&thd->ownership);
 
+	//printf("thread-%d: try process polling connections...\n", thd->thread);
 	/* Process polling connections
 	 */
 	process_polling_connections (thd);
 
+	//printf("thread-%d: try process active connections...\n", thd->thread);
 	/* Process active connections
 	 */
 	ret = process_active_connections (thd);
 
 	/* Release the thread
 	 */
+	//printf("thread-%d: try unlock ownership...\n", thd->thread);
 	CHEROKEE_MUTEX_UNLOCK (&thd->ownership);
+	//printf("thread-%d: unlock ownership succeed!\n", thd->thread);
 	return ret;
 }
 

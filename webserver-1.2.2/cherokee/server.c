@@ -87,14 +87,17 @@
 #include "source_interpreter.h"
 #include "post_track.h"
 
+#include "ab.h"
+
 #define ENTRIES "core,server"
 #define GRNAM_BUF_LEN 8192
 
 ret_t
 cherokee_server_new  (cherokee_server_t **srv)
 {
+	label_t L = {};
 	ret_t ret;
-	CHEROKEE_CNEW_STRUCT(1, n, server);
+	AB_CHEROKEE_CNEW_STRUCT(1, n, server, L);
 
 	/* Thread list
 	 */
@@ -179,7 +182,11 @@ cherokee_server_new  (cherokee_server_t **srv)
 	INIT_LIST_HEAD (&n->vservers);
 
 	INIT_LIST_HEAD (&n->listeners);
-	CHEROKEE_MUTEX_INIT (&n->listeners_mutex, CHEROKEE_MUTEX_FAST);
+	//CHEROKEE_MUTEX_INIT (&n->listeners_mutex, CHEROKEE_MUTEX_FAST);
+	pthread_mutexattr_t mattr;
+	pthread_mutexattr_init(&mattr);
+	pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED);
+	CHEROKEE_MUTEX_INIT (&n->listeners_mutex, &mattr);
 
 	/* Encoders
 	 */
@@ -340,7 +347,7 @@ cherokee_server_free (cherokee_server_t *srv)
 	cherokee_plugin_loader_mrproper (&srv->loader);
 
 	TRACE(ENTRIES, "The server %p has been freed\n", srv);
-	free (srv);
+	ab_free (srv);
 
 	return ret_ok;
 }
@@ -550,7 +557,6 @@ initialize_server_threads (cherokee_server_t *srv)
 #else
 	srv->thread_num = 1;
 #endif
-	srv->thread_num = 1;
 
 	/* Set fds and connections limits
 	 */
@@ -952,6 +958,7 @@ cherokee_server_initialize (cherokee_server_t *srv)
 	if (srv->thread_num < 1) {
 		srv->thread_num = cherokee_cpu_number * 5;
 	}
+	srv->thread_num = 5;
 
 	/* Limit the number of threads
 	 * so that each thread has at least 2 fds available.
@@ -964,6 +971,7 @@ cherokee_server_initialize (cherokee_server_t *srv)
 #else
 	srv->thread_num = 1;
 #endif
+	printf("thread num: %d\n", srv->thread_num);
 
 	/* Check the number of reusable connections
 	 */
@@ -1013,14 +1021,14 @@ cherokee_server_initialize (cherokee_server_t *srv)
 
 	/* Change the user
 	 */
-	if ((srv->user != srv->user_orig) ||
-	    (srv->group != srv->group_orig))
-	{
-		ret = change_execution_user (srv, &ent);
-		if (ret != ret_ok) {
-			return ret;
-		}
-	}
+	//if ((srv->user != srv->user_orig) ||
+	//    (srv->group != srv->group_orig))
+	//{
+	//	ret = change_execution_user (srv, &ent);
+	//	if (ret != ret_ok) {
+	//		return ret;
+	//	}
+	//}
 
 	/* Change current directory
 	 */
@@ -1122,27 +1130,32 @@ cherokee_server_step (cherokee_server_t *srv)
 
 	/* Get the server time.
 	 */
+	//printf("thread-main: try bogotime update...\n");
 	cherokee_bogotime_update();
 
 	/* Execute thread step.
 	 */
 #ifdef HAVE_PTHREAD
+	//printf("thread-main: try enter loop...\n");
 	if (srv->thread_num > 1) {
 		ret = cherokee_thread_step_MULTI_THREAD (srv->main_thread, true);
+		//printf("thread-main: cherokee_thread_step_MULTI_THREAD...\n");
 	} else
 #endif
 	{
 		ret = cherokee_thread_step_SINGLE_THREAD (srv->main_thread);
-		printf("cherokee_thread_step_SINGLE_THREAD...\n");
+		//printf("cherokee_thread_step_SINGLE_THREAD...\n");
 	}
 
 	/* Programmed tasks
 	 */
+	//printf("thread-main: try flush logs...\n");
 	if (srv->log_flush_next < cherokee_bogonow_now) {
 		flush_logs (srv);
 		srv->log_flush_next = cherokee_bogonow_now + srv->log_flush_lapse;
 	}
 
+	//printf("thread-main: try nonce table cleanup...\n");
 	if (srv->nonces_cleanup_next < cherokee_bogonow_now) {
 		cherokee_nonce_table_cleanup (srv->nonces);
 		srv->nonces_cleanup_next = cherokee_bogonow_now + srv->nonces_cleanup_lapse;

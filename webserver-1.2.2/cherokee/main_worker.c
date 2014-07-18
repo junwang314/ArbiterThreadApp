@@ -150,6 +150,7 @@ signals_handler (int sig, siginfo_t *si, void *context)
 #ifdef SIGBUS
 	case SIGBUS:
 #endif
+		printf ("Server received SIGSEGV..\n");
 		cherokee_server_handle_panic (srv);
 		break;
 

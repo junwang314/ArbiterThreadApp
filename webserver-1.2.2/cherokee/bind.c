@@ -25,11 +25,14 @@
 #include "common-internal.h"
 #include "bind.h"
 #include "util.h"
+#include "ab.h"
 
 ret_t
 cherokee_bind_new (cherokee_bind_t **listener)
 {
-	CHEROKEE_NEW_STRUCT(n,bind);
+	//CHEROKEE_NEW_STRUCT(n,bind);
+	label_t L = {};
+	AB_CHEROKEE_NEW_STRUCT(n,bind,L);
 
 	INIT_LIST_HEAD (&n->listed);
 
@@ -67,7 +70,7 @@ cherokee_bind_free (cherokee_bind_t *listener)
 	cherokee_buffer_mrproper (&listener->server_address);
 	cherokee_buffer_mrproper (&listener->server_port);
 
-	free (listener);
+	ab_free (listener);
 	return ret_ok;
 }
 

@@ -94,7 +94,11 @@ cherokee_bogotime_init (void)
 	}
 
 	/* RW-lock mutex */
-	CHEROKEE_RWLOCK_INIT (&lock, NULL);
+	pthread_rwlockattr_t rwattr;
+	pthread_rwlockattr_init(&rwattr);
+	pthread_rwlockattr_setpshared(&rwattr, PTHREAD_PROCESS_SHARED);
+	CHEROKEE_RWLOCK_INIT (&lock, &rwattr);
+	//CHEROKEE_RWLOCK_INIT (&lock, NULL);
 
 	/* Properties */
 	cherokee_bogonow_now = 0;

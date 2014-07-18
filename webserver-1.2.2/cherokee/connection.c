@@ -1490,15 +1490,16 @@ get_host (cherokee_connection_t *conn,
 	/* Copy the host and port
 	 */
 	if (colon) {
-		ret = cherokee_buffer_add (&conn->host_port, colon+1, end-(colon+1));
+		//ret = cherokee_buffer_add (&conn->host_port, colon+1, end-(colon+1));
+		ret = ab_cherokee_buffer_add (&conn->host_port, colon+1, end-(colon+1));
 		if (unlikely (ret != ret_ok))
 			return ret;
 
-		ret = cherokee_buffer_add (&conn->host, ptr, colon - ptr);
+		ret = ab_cherokee_buffer_add (&conn->host, ptr, colon - ptr);
 		if (unlikely (ret != ret_ok))
 			return ret;
 	} else {
-		ret = cherokee_buffer_add (&conn->host, ptr, size);
+		ret = ab_cherokee_buffer_add (&conn->host, ptr, size);
 		if (unlikely (ret != ret_ok))
 			return ret;
 	}
@@ -1757,7 +1758,8 @@ cherokee_connection_build_local_directory (cherokee_connection_t     *conn,
 
 	/* Regular request
 	 */
-	ret = cherokee_buffer_add_buffer (&conn->local_directory, &vsrv->root);
+	//ret = cherokee_buffer_add_buffer (&conn->local_directory, &vsrv->root);
+	ret = ab_cherokee_buffer_add_buffer (&conn->local_directory, &vsrv->root);
 	if (unlikely (ret != ret_ok)) {
 		goto error;
 	}

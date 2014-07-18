@@ -204,11 +204,21 @@
 	malloc (sizeof(CHEROKEE_MK_TYPE(type)));                   \
 	return_if_fail (obj != NULL, ret_nomem)
 
+#define AB_CHEROKEE_NEW_STRUCT(obj,type,L)                              \
+	CHEROKEE_DCL_STRUCT(obj,type) = (CHEROKEE_MK_TYPE(type) *) \
+	ab_malloc (sizeof(CHEROKEE_MK_TYPE(type)), L);                   \
+	return_if_fail (obj != NULL, ret_nomem)
+
 /* Declare and allocate a zeroed new struct.
  */
 #define CHEROKEE_CNEW_STRUCT(nmemb,obj,type)                       \
 	CHEROKEE_DCL_STRUCT(obj,type) = (CHEROKEE_MK_TYPE(type) *) \
 	calloc ((nmemb), sizeof(CHEROKEE_MK_TYPE(type)));          \
+	return_if_fail (obj != NULL, ret_nomem)
+
+#define AB_CHEROKEE_CNEW_STRUCT(nmemb,obj,type,L)                       \
+	CHEROKEE_DCL_STRUCT(obj,type) = (CHEROKEE_MK_TYPE(type) *) \
+	ab_calloc ((nmemb), sizeof(CHEROKEE_MK_TYPE(type)), L);          \
 	return_if_fail (obj != NULL, ret_nomem)
 
 /* Declare and initialize a new object.
