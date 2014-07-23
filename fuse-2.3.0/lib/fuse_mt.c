@@ -41,9 +41,9 @@ static void *do_work(void *data)
 	char *mt = NULL;
 
 	mt = getenv("ARBITER_MT");
-	printf("ARBITER_MT=%s\n", mt);
+	AB_INFO("ARBITER_MT=%s\n", mt);
 
-	printf("%u: try malloc ctx...\n", ab_pthread_self());
+	AB_INFO("%u: try malloc ctx...\n", ab_pthread_self());
     ctx = (struct fuse_context *) malloc(sizeof(struct fuse_context));
     if (ctx == NULL) {
         fprintf(stderr, "fuse: failed to allocate fuse context\n");
@@ -57,7 +57,7 @@ static void *do_work(void *data)
     pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
-	printf("%u: entering loop...\n", ab_pthread_self());
+	AB_INFO("%u: entering loop...\n", ab_pthread_self());
     while (1) {
         struct fuse_cmd *cmd;
 
@@ -69,9 +69,9 @@ static void *do_work(void *data)
         if (cmd == NULL)
             continue;
 
-		printf("%u: f->numavail=%d\n", ab_pthread_self(), f->numavail);
+		AB_INFO("%u: f->numavail=%d\n", ab_pthread_self(), f->numavail);
         //if (strncmp(mt, "Y", 1)==0 && f->numavail == 0 && f->numworker < FUSE_MAX_WORKERS) {
-		printf("%u: numworker=%d\n", ab_pthread_self(), f->numworker);
+		AB_INFO("%u: numworker=%d\n", ab_pthread_self(), f->numworker);
         if (f->numworker < 3) {
             pthread_mutex_lock(&f->worker_lock);
             if (f->numworker < FUSE_MAX_WORKERS) {
@@ -92,7 +92,7 @@ static void *do_work(void *data)
                 pthread_mutex_unlock(&f->worker_lock);
         }
 
-		printf("%u: processing cmd...\n", ab_pthread_self());
+		AB_INFO("%u: processing cmd...\n", ab_pthread_self());
         w->proc(w->f, cmd, w->data);
         //sleep(1000);
     }
@@ -117,7 +117,7 @@ static int start_thread(struct fuse_worker *w, pthread_t *thread_id)
     //pthread_sigmask(SIG_SETMASK, &newset, &oldset);
     //res = pthread_create(thread_id, NULL, do_work, w);
     res = ab_pthread_create(thread_id, NULL, do_work, w, L, O);
-	printf("%u: ab_pthread_create done!\n", ab_pthread_self());
+	AB_INFO("%u: ab_pthread_create done!\n", ab_pthread_self());
     //pthread_sigmask(SIG_SETMASK, &oldset, NULL);
     if (res != 0) {
         fprintf(stderr, "fuse: error creating thread: %s\n", strerror(res));
@@ -125,7 +125,7 @@ static int start_thread(struct fuse_worker *w, pthread_t *thread_id)
     }
 
     //pthread_detach(*thread_id);
-	printf("%u: start_thread done!\n", ab_pthread_self());
+	AB_INFO("%u: start_thread done!\n", ab_pthread_self());
     return 0;
 }
 

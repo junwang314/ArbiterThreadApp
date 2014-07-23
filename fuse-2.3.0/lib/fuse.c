@@ -95,7 +95,7 @@ static struct fuse_context *(*fuse_getcontext)(void) = NULL;
 //#define mutex_init(mut) pthread_mutex_init(mut, NULL)
 static void mutex_init(pthread_mutex_t* mut)
 {
-	printf("mutex_init...\n");
+	AB_INFO("mutex_init...\n");
     pthread_mutexattr_t attr;
     pthread_mutexattr_init(&attr);
 	pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED);
@@ -188,7 +188,7 @@ static struct node *get_node(struct fuse *f, nodeid_t nodeid)
 
 static void free_node(struct node *node)
 {
-	printf("=====free_node(%p)\n", node);
+	AB_DBG("=====free_node(%p)\n", node);
     ab_free(node->name);
     ab_free(node);
 }
@@ -277,7 +277,7 @@ static int hash_name(struct fuse *f, struct node *node, nodeid_t parent,
 static void delete_node(struct fuse *f, struct node *node)
 {
     if (f->flags & FUSE_DEBUG) {
-        printf("delete: %lu\n", node->nodeid);
+        AB_DBG("delete: %lu\n", node->nodeid);
         fflush(stdout);
     }
     assert(!node->name);
@@ -697,12 +697,12 @@ static void do_lookup(struct fuse *f, struct fuse_in_header *in, char *name)
     char *path;
     struct fuse_entry_out arg;
 
-	printf("do_lookup(): 1\n");
+	AB_DBG("do_lookup(): 1\n");
     res = -ENOENT;
     pthread_rwlock_rdlock(&f->tree_lock);
-	printf("do_lookup(): 2\n");
+	AB_DBG("do_lookup(): 2\n");
     path = get_path_name(f, in->nodeid, name);
-	printf("do_lookup(): 3\n");
+	AB_DBG("do_lookup(): 3\n");
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
             printf("LOOKUP %s\n", path);
@@ -713,13 +713,13 @@ static void do_lookup(struct fuse *f, struct fuse_in_header *in, char *name)
             res = lookup_path(f, in->nodeid, in->unique, name, path, &arg);
         free(path);
     }
-	printf("do_lookup(): 4\n");
+	AB_DBG("do_lookup(): 4\n");
     pthread_rwlock_unlock(&f->tree_lock);
     res2 = send_reply(f, in, res, &arg, sizeof(arg));
-	printf("do_lookup(): 5\n");
+	AB_DBG("do_lookup(): 5\n");
     if (res == 0 && res2 == -ENOENT)
         cancel_lookup(f, arg.nodeid, in->unique);
-	printf("do_lookup(): 6\n");
+	AB_DBG("do_lookup(): 6\n");
 }
 
 static void do_forget(struct fuse *f, struct fuse_in_header *in,
@@ -889,7 +889,7 @@ static void do_mknod(struct fuse *f, struct fuse_in_header *in,
     char *name = PARAM(inarg);
     struct fuse_entry_out outarg;
 
-	printf("1\n");
+	AB_DBG("1\n");
     res = -ENOENT;
     pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path_name(f, in->nodeid, name);
@@ -898,17 +898,17 @@ static void do_mknod(struct fuse *f, struct fuse_in_header *in,
             printf("MKNOD %s\n", path);
             fflush(stdout);
         }
-		printf("2\n");
+		AB_DBG("2\n");
         res = -ENOSYS;
         if (f->op.mknod && f->op.getattr) {
             res = f->op.mknod(path, inarg->mode, inarg->rdev);
-			printf("3\n");
+			AB_DBG("3\n");
             if (res == 0) {
                 res = lookup_path(f, in->nodeid, in->unique, name, path, &outarg);
-				printf("4\n");
+				AB_DBG("4\n");
 			}
         }
-		printf("5\n");
+		AB_DBG("5\n");
         free(path);
     }
     pthread_rwlock_unlock(&f->tree_lock);
@@ -1120,30 +1120,30 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
     struct fuse_open_out outarg;
     struct fuse_file_info fi;
 
-	printf("do_open(): 1\n");
+	AB_DBG("do_open(): 1\n");
     memset(&outarg, 0, sizeof(outarg));
     memset(&fi, 0, sizeof(fi));
     fi.flags = arg->flags;
     res = -ENOENT;
     pthread_rwlock_rdlock(&f->tree_lock);
-	printf("do_open(): 2\n");
+	AB_DBG("do_open(): 2\n");
     path = get_path(f, in->nodeid);
-	printf("do_open(): 21\n");
+	AB_DBG("do_open(): 21\n");
     if (path != NULL) {
-		printf("do_open(): 22\n");
+		AB_DBG("do_open(): 22\n");
         res = -ENOSYS;
         if (f->op.open) {
             if (!f->compat) {
-				printf("do_open(): 23\n");
+				AB_DBG("do_open(): 23\n");
                 res = f->op.open(path, &fi);
 			}
             else {
-				printf("do_open(): 24\n");
+				AB_DBG("do_open(): 24\n");
                 res = ((struct fuse_operations_compat2 *) &f->op)->open(path, fi.flags);
 			}
         }
     }
-	printf("do_open(): 3\n");
+	AB_DBG("do_open(): 3\n");
     if (res == 0) {
         int res2;
         outarg.fh = fi.fh;
@@ -1152,9 +1152,9 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
             fflush(stdout);
         }
 
-		printf("do_open(): 4\n");
+		AB_DBG("do_open(): 4\n");
         pthread_mutex_lock(&f->lock);
-		printf("do_open(): 5\n");
+		AB_DBG("do_open(): 5\n");
         res2 = send_reply(f, in, res, &outarg, SIZEOF_COMPAT(f, fuse_open_out));
         if(res2 == -ENOENT) {
             /* The open syscall was interrupted, so it must be cancelled */
@@ -1168,19 +1168,19 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
             struct node *node = get_node(f, in->nodeid);
             node->open_count ++;
         }
-		printf("do_open(): 6\n");
+		AB_DBG("do_open(): 6\n");
         pthread_mutex_unlock(&f->lock);
-		printf("do_open(): 7\n");
+		AB_DBG("do_open(): 7\n");
     } else {
-		printf("do_open(): 4'\n");
+		AB_DBG("do_open(): 4'\n");
         send_reply(f, in, res, NULL, 0);
 	}
 
     if (path)
         free(path);
-	printf("do_open(): 8\n");
+	AB_DBG("do_open(): 8\n");
     pthread_rwlock_unlock(&f->tree_lock);
-	printf("do_open(): 9\n");
+	AB_DBG("do_open(): 9\n");
 }
 
 static void do_flush(struct fuse *f, struct fuse_in_header *in,
@@ -1906,7 +1906,7 @@ void fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
     void *inarg = cmd->buf + SIZEOF_COMPAT(f, fuse_in_header);
     struct fuse_context *ctx = fuse_get_context();
 
-	printf("%u: fuse_dec_avail...\n", ab_pthread_self());
+	AB_INFO("%u: fuse_dec_avail...\n", ab_pthread_self());
     fuse_dec_avail(f);
 
     if ((f->flags & FUSE_DEBUG)) {
@@ -1937,7 +1937,7 @@ void fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
     ctx->pid = in->pid;
     ctx->private_data = f->user_data;
 
-	printf("%u: processing based on opcode %d!\n", ab_pthread_self(), in->opcode);
+	AB_INFO("%u: processing based on opcode %d!\n", ab_pthread_self(), in->opcode);
     switch (in->opcode) {
     case FUSE_LOOKUP:
         do_lookup(f, in, (char *) inarg);
@@ -2053,7 +2053,7 @@ void fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
     }
 
  out:
-	printf("%u: proc cmd done!\n", ab_pthread_self());
+	AB_INFO("%u: proc cmd done!\n", ab_pthread_self());
     free_cmd(cmd);
 }
 
