@@ -38,7 +38,12 @@ static void *do_work(void *data)
     struct fuse *f = w->f;
     struct fuse_context *ctx;
     int is_mainthread = (f->numworker == 1);
+	char *mt = NULL;
 
+	mt = getenv("ARBITER_MT");
+	printf("ARBITER_MT=%s\n", mt);
+
+	printf("%u: try malloc ctx...\n", ab_pthread_self());
     ctx = (struct fuse_context *) malloc(sizeof(struct fuse_context));
     if (ctx == NULL) {
         fprintf(stderr, "fuse: failed to allocate fuse context\n");
@@ -52,37 +57,44 @@ static void *do_work(void *data)
     pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
+	printf("%u: entering loop...\n", ab_pthread_self());
     while (1) {
         struct fuse_cmd *cmd;
 
         if (fuse_exited(f))
             break;
 
+        AB_DBG("%u: read cmd...\n", ab_pthread_self());
         cmd = fuse_read_cmd(w->f);
         if (cmd == NULL)
             continue;
 
-        //if (f->numavail == 0 && f->numworker < FUSE_MAX_WORKERS) {
-        //    pthread_mutex_lock(&f->worker_lock);
-        //    if (f->numworker < FUSE_MAX_WORKERS) {
-        //        /* FIXME: threads should be stored in a list instead
-        //           of an array */
-        //        int res;
-        //        pthread_t *thread_id = &w->threads[f->numworker];
-        //        f->numavail ++;
-        //        f->numworker ++;
-        //        pthread_mutex_unlock(&f->worker_lock);
-        //        res = start_thread(w, thread_id);
-        //        if (res == -1) {
-        //            pthread_mutex_lock(&f->worker_lock);
-        //            f->numavail --;
-        //            pthread_mutex_unlock(&f->worker_lock);
-        //        }
-        //    } else
-        //        pthread_mutex_unlock(&f->worker_lock);
-        //}
+		printf("%u: f->numavail=%d\n", ab_pthread_self(), f->numavail);
+        //if (strncmp(mt, "Y", 1)==0 && f->numavail == 0 && f->numworker < FUSE_MAX_WORKERS) {
+		printf("%u: numworker=%d\n", ab_pthread_self(), f->numworker);
+        if (f->numworker < 3) {
+            pthread_mutex_lock(&f->worker_lock);
+            if (f->numworker < FUSE_MAX_WORKERS) {
+                /* FIXME: threads should be stored in a list instead
+                   of an array */
+                int res;
+                pthread_t *thread_id = &w->threads[f->numworker];
+                f->numavail ++;
+                f->numworker ++;
+                pthread_mutex_unlock(&f->worker_lock);
+                res = start_thread(w, thread_id);
+                if (res == -1) {
+                    pthread_mutex_lock(&f->worker_lock);
+                    f->numavail --;
+                    pthread_mutex_unlock(&f->worker_lock);
+                }
+            } else
+                pthread_mutex_unlock(&f->worker_lock);
+        }
 
+		printf("%u: processing cmd...\n", ab_pthread_self());
         w->proc(w->f, cmd, w->data);
+        //sleep(1000);
     }
 
     /* Wait for cancellation */
@@ -98,17 +110,22 @@ static int start_thread(struct fuse_worker *w, pthread_t *thread_id)
     sigset_t newset;
     int res;
 
+    label_t L = {};
+    own_t O = {};
     /* Disallow signal reception in worker threads */
     sigfillset(&newset);
-    pthread_sigmask(SIG_SETMASK, &newset, &oldset);
-    res = pthread_create(thread_id, NULL, do_work, w);
-    pthread_sigmask(SIG_SETMASK, &oldset, NULL);
+    //pthread_sigmask(SIG_SETMASK, &newset, &oldset);
+    //res = pthread_create(thread_id, NULL, do_work, w);
+    res = ab_pthread_create(thread_id, NULL, do_work, w, L, O);
+	printf("%u: ab_pthread_create done!\n", ab_pthread_self());
+    //pthread_sigmask(SIG_SETMASK, &oldset, NULL);
     if (res != 0) {
         fprintf(stderr, "fuse: error creating thread: %s\n", strerror(res));
         return -1;
     }
 
-    pthread_detach(*thread_id);
+    //pthread_detach(*thread_id);
+	printf("%u: start_thread done!\n", ab_pthread_self());
     return 0;
 }
 
@@ -161,7 +178,9 @@ int fuse_loop_mt_proc(struct fuse *f, fuse_processor_t proc, void *data)
     struct fuse_worker *w;
     int i;
 
-    w = malloc(sizeof(struct fuse_worker));
+    label_t L = {};
+
+    w = ab_malloc(sizeof(struct fuse_worker), L);
     if (w == NULL) {
         fprintf(stderr, "fuse: failed to allocate worker structure\n");
         return -1;
@@ -172,7 +191,7 @@ int fuse_loop_mt_proc(struct fuse *f, fuse_processor_t proc, void *data)
     w->proc = proc;
 
     if (mt_create_context_key() != 0) {
-        free(w);
+        ab_free(w);
         return -1;
     }
     f->numworker = 1;
@@ -183,7 +202,7 @@ int fuse_loop_mt_proc(struct fuse *f, fuse_processor_t proc, void *data)
         pthread_cancel(w->threads[i]);
     pthread_mutex_unlock(&f->lock);
     mt_delete_context_key();
-    free(w);
+    ab_free(w);
     f->exited = 0;
     return 0;
 }

@@ -92,13 +92,23 @@ struct fuse_cmd {
 static struct fuse_context *(*fuse_getcontext)(void) = NULL;
 
 #ifndef USE_UCLIBC
-#define mutex_init(mut) pthread_mutex_init(mut, NULL)
+//#define mutex_init(mut) pthread_mutex_init(mut, NULL)
+static void mutex_init(pthread_mutex_t* mut)
+{
+	printf("mutex_init...\n");
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+	pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED);
+    pthread_mutex_init(mut, &attr);
+    pthread_mutexattr_destroy(&attr);
+}
 #else
 static void mutex_init(pthread_mutex_t mut)
 {
     pthread_mutexattr_t attr;
     pthread_mutexattr_init(&attr);
     pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ADAPTIVE_NP);
+	pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED);
     pthread_mutex_init(mut, &attr);
     pthread_mutexattr_destroy(&attr);
 }
@@ -178,8 +188,9 @@ static struct node *get_node(struct fuse *f, nodeid_t nodeid)
 
 static void free_node(struct node *node)
 {
-    free(node->name);
-    free(node);
+	printf("=====free_node(%p)\n", node);
+    ab_free(node->name);
+    ab_free(node);
 }
 
 static void unhash_id(struct fuse *f, struct node *node)
@@ -225,22 +236,34 @@ static void unhash_name(struct fuse *f, struct node *node)
                 *nodep = node->name_next;
                 node->name_next = NULL;
                 unref_node(f, get_node(f, node->parent));
-                free(node->name);
+                ab_free(node->name);
                 node->name = NULL;
                 node->parent = 0;
                 return;
             }
         fprintf(stderr, "fuse internal error: unable to unhash node: %lu\n",
                 node->nodeid);
+		return;
         abort();
     }
+}
+
+char * ab_strdup(const char *s)
+{
+	assert(s);
+	size_t len = strlen(s);
+	label_t L = {};
+	char * ret = ab_malloc(len, L);
+	strncpy(ret, s, len);
+	return ret;
 }
 
 static int hash_name(struct fuse *f, struct node *node, nodeid_t parent,
                      const char *name)
 {
     size_t hash = name_hash(f, parent, name);
-    node->name = strdup(name);
+    //node->name = strdup(name);
+    node->name = ab_strdup(name);
     if (node->name == NULL)
         return -1;
 
@@ -299,6 +322,7 @@ static struct node *find_node(struct fuse *f, nodeid_t parent, char *name,
     struct node *node;
     int mode = attr->mode & S_IFMT;
     int rdev = 0;
+	label_t L = {};
 
     if (S_ISCHR(mode) || S_ISBLK(mode))
         rdev = attr->rdev;
@@ -309,7 +333,7 @@ static struct node *find_node(struct fuse *f, nodeid_t parent, char *name,
         if (!(f->flags & FUSE_USE_INO))
             attr->ino = node->nodeid;
     } else {
-        node = (struct node *) calloc(1, sizeof(struct node));
+        node = (struct node *) ab_calloc(1, sizeof(struct node), L);
         if (node == NULL)
             goto out_err;
 
@@ -321,7 +345,7 @@ static struct node *find_node(struct fuse *f, nodeid_t parent, char *name,
         node->is_hidden = 0;
         node->generation = f->generation;
         if (hash_name(f, node, parent, name) == -1) {
-            free(node);
+            ab_free(node);
             node = NULL;
             goto out_err;
         }
@@ -381,8 +405,10 @@ static char *get_path_name(struct fuse *f, nodeid_t nodeid, const char *name)
         return NULL;
     else if (*s == '\0')
         return strdup("/");
+        //return ab_strdup("/");
     else
         return strdup(s);
+        //return ab_strdup(s);
 }
 
 static char *get_path(struct fuse *f, nodeid_t nodeid)
@@ -671,9 +697,12 @@ static void do_lookup(struct fuse *f, struct fuse_in_header *in, char *name)
     char *path;
     struct fuse_entry_out arg;
 
+	printf("do_lookup(): 1\n");
     res = -ENOENT;
     pthread_rwlock_rdlock(&f->tree_lock);
+	printf("do_lookup(): 2\n");
     path = get_path_name(f, in->nodeid, name);
+	printf("do_lookup(): 3\n");
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
             printf("LOOKUP %s\n", path);
@@ -684,10 +713,13 @@ static void do_lookup(struct fuse *f, struct fuse_in_header *in, char *name)
             res = lookup_path(f, in->nodeid, in->unique, name, path, &arg);
         free(path);
     }
+	printf("do_lookup(): 4\n");
     pthread_rwlock_unlock(&f->tree_lock);
     res2 = send_reply(f, in, res, &arg, sizeof(arg));
+	printf("do_lookup(): 5\n");
     if (res == 0 && res2 == -ENOENT)
         cancel_lookup(f, arg.nodeid, in->unique);
+	printf("do_lookup(): 6\n");
 }
 
 static void do_forget(struct fuse *f, struct fuse_in_header *in,
@@ -857,6 +889,7 @@ static void do_mknod(struct fuse *f, struct fuse_in_header *in,
     char *name = PARAM(inarg);
     struct fuse_entry_out outarg;
 
+	printf("1\n");
     res = -ENOENT;
     pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path_name(f, in->nodeid, name);
@@ -865,12 +898,17 @@ static void do_mknod(struct fuse *f, struct fuse_in_header *in,
             printf("MKNOD %s\n", path);
             fflush(stdout);
         }
+		printf("2\n");
         res = -ENOSYS;
         if (f->op.mknod && f->op.getattr) {
             res = f->op.mknod(path, inarg->mode, inarg->rdev);
-            if (res == 0)
+			printf("3\n");
+            if (res == 0) {
                 res = lookup_path(f, in->nodeid, in->unique, name, path, &outarg);
+				printf("4\n");
+			}
         }
+		printf("5\n");
         free(path);
     }
     pthread_rwlock_unlock(&f->tree_lock);
@@ -1082,21 +1120,30 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
     struct fuse_open_out outarg;
     struct fuse_file_info fi;
 
+	printf("do_open(): 1\n");
     memset(&outarg, 0, sizeof(outarg));
     memset(&fi, 0, sizeof(fi));
     fi.flags = arg->flags;
     res = -ENOENT;
     pthread_rwlock_rdlock(&f->tree_lock);
+	printf("do_open(): 2\n");
     path = get_path(f, in->nodeid);
+	printf("do_open(): 21\n");
     if (path != NULL) {
+		printf("do_open(): 22\n");
         res = -ENOSYS;
         if (f->op.open) {
-            if (!f->compat)
+            if (!f->compat) {
+				printf("do_open(): 23\n");
                 res = f->op.open(path, &fi);
-            else
+			}
+            else {
+				printf("do_open(): 24\n");
                 res = ((struct fuse_operations_compat2 *) &f->op)->open(path, fi.flags);
+			}
         }
     }
+	printf("do_open(): 3\n");
     if (res == 0) {
         int res2;
         outarg.fh = fi.fh;
@@ -1105,7 +1152,9 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
             fflush(stdout);
         }
 
+		printf("do_open(): 4\n");
         pthread_mutex_lock(&f->lock);
+		printf("do_open(): 5\n");
         res2 = send_reply(f, in, res, &outarg, SIZEOF_COMPAT(f, fuse_open_out));
         if(res2 == -ENOENT) {
             /* The open syscall was interrupted, so it must be cancelled */
@@ -1119,13 +1168,19 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
             struct node *node = get_node(f, in->nodeid);
             node->open_count ++;
         }
+		printf("do_open(): 6\n");
         pthread_mutex_unlock(&f->lock);
-    } else
+		printf("do_open(): 7\n");
+    } else {
+		printf("do_open(): 4'\n");
         send_reply(f, in, res, NULL, 0);
+	}
 
     if (path)
         free(path);
+	printf("do_open(): 8\n");
     pthread_rwlock_unlock(&f->tree_lock);
+	printf("do_open(): 9\n");
 }
 
 static void do_flush(struct fuse *f, struct fuse_in_header *in,
@@ -1585,8 +1640,9 @@ static void do_opendir(struct fuse *f, struct fuse_in_header *in,
     int res;
     struct fuse_open_out outarg;
     struct fuse_dirhandle *dh;
+	label_t L = {};
 
-    dh = (struct fuse_dirhandle *) malloc(sizeof(struct fuse_dirhandle));
+    dh = (struct fuse_dirhandle *) ab_malloc(sizeof(struct fuse_dirhandle), L);
     if (dh == NULL) {
         send_reply(f, in, -ENOMEM, NULL, 0);
         return;
@@ -1630,12 +1686,12 @@ static void do_opendir(struct fuse *f, struct fuse_in_header *in,
                 if(f->op.releasedir)
                     f->op.releasedir(path, &fi);
                 pthread_mutex_destroy(&dh->lock);
-                free(dh);
+                ab_free(dh);
             }
             pthread_mutex_unlock(&f->lock);
         } else {
             send_reply(f, in, res, NULL, 0);
-            free(dh);
+            ab_free(dh);
         }
         free(path);
         pthread_rwlock_unlock(&f->tree_lock);
@@ -1683,7 +1739,7 @@ static int fill_dir_common(struct fuse_dirhandle *dh, const char *name,
             return 1;
     }
 
-    newptr = realloc(dh->contents, newlen);
+    newptr = ab_realloc(dh->contents, newlen);
     if (!newptr) {
         dh->error = -ENOMEM;
         return 1;
@@ -1809,8 +1865,8 @@ static void do_releasedir(struct fuse *f, struct fuse_in_header *in,
     pthread_mutex_lock(&dh->lock);
     pthread_mutex_unlock(&dh->lock);
     pthread_mutex_destroy(&dh->lock);
-    free(dh->contents);
-    free(dh);
+    ab_free(dh->contents);
+    ab_free(dh);
     send_reply(f, in, 0, NULL, 0);
 }
 
@@ -1850,6 +1906,7 @@ void fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
     void *inarg = cmd->buf + SIZEOF_COMPAT(f, fuse_in_header);
     struct fuse_context *ctx = fuse_get_context();
 
+	printf("%u: fuse_dec_avail...\n", ab_pthread_self());
     fuse_dec_avail(f);
 
     if ((f->flags & FUSE_DEBUG)) {
@@ -1880,6 +1937,7 @@ void fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
     ctx->pid = in->pid;
     ctx->private_data = f->user_data;
 
+	printf("%u: processing based on opcode %d!\n", ab_pthread_self(), in->opcode);
     switch (in->opcode) {
     case FUSE_LOOKUP:
         do_lookup(f, in, (char *) inarg);
@@ -1995,6 +2053,7 @@ void fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
     }
 
  out:
+	printf("%u: proc cmd done!\n", ab_pthread_self());
     free_cmd(cmd);
 }
 
@@ -2160,7 +2219,8 @@ struct fuse *fuse_new_common(int fd, const char *opts,
         op_size = sizeof(struct fuse_operations);
     }
 
-    f = (struct fuse *) calloc(1, sizeof(struct fuse));
+    label_t L = {};
+    f = (struct fuse *) ab_calloc(1, sizeof(struct fuse), L);
     if (f == NULL) {
         fprintf(stderr, "fuse: failed to allocate fuse object\n");
         goto out;
@@ -2175,7 +2235,7 @@ struct fuse *fuse_new_common(int fd, const char *opts,
     /* FIXME: Dynamic hash table */
     f->name_table_size = 14057;
     f->name_table = (struct node **)
-        calloc(1, sizeof(struct node *) * f->name_table_size);
+        ab_calloc(1, sizeof(struct node *) * f->name_table_size, L);
     if (f->name_table == NULL) {
         fprintf(stderr, "fuse: memory allocation failed\n");
         goto out_free;
@@ -2183,27 +2243,33 @@ struct fuse *fuse_new_common(int fd, const char *opts,
 
     f->id_table_size = 14057;
     f->id_table = (struct node **)
-        calloc(1, sizeof(struct node *) * f->id_table_size);
+        ab_calloc(1, sizeof(struct node *) * f->id_table_size, L);
     if (f->id_table == NULL) {
         fprintf(stderr, "fuse: memory allocation failed\n");
         goto out_free_name_table;
     }
 
+#ifdef USE_UCLIBC
+	printf("USE_UCLIBC\n");
+#else
+	printf("no USE_UCLIBC\n");
+#endif
     mutex_init(&f->lock);
     mutex_init(&f->worker_lock);
+    mutex_init(&f->tree_lock);
     f->numworker = 0;
     f->numavail = 0;
     memcpy(&f->op, op, op_size);
     f->compat = compat;
     f->exited = 0;
 
-    root = (struct node *) calloc(1, sizeof(struct node));
+    root = (struct node *) ab_calloc(1, sizeof(struct node), L);
     if (root == NULL) {
         fprintf(stderr, "fuse: memory allocation failed\n");
         goto out_free_id_table;
     }
 
-    root->name = strdup("/");
+    root->name = ab_strdup("/");
     if (root->name == NULL) {
         fprintf(stderr, "fuse: memory allocation failed\n");
         goto out_free_root;
@@ -2221,13 +2287,13 @@ struct fuse *fuse_new_common(int fd, const char *opts,
     return f;
 
  out_free_root:
-    free(root);
+    ab_free(root);
  out_free_id_table:
-    free(f->id_table);
+    ab_free(f->id_table);
  out_free_name_table:
-    free(f->name_table);
+    ab_free(f->name_table);
  out_free:
-    free(f);
+    ab_free(f);
  out:
     return NULL;
 }
@@ -2280,13 +2346,13 @@ void fuse_destroy(struct fuse *f)
             free_node(node);
         }
     }
-    free(f->id_table);
-    free(f->name_table);
+    ab_free(f->id_table);
+    ab_free(f->name_table);
     pthread_mutex_destroy(&f->lock);
     pthread_mutex_destroy(&f->worker_lock);
     if (f->op.destroy)
         f->op.destroy(f->user_data);
-    free(f);
+    ab_free(f);
 }
 
 __asm__(".symver fuse_exited,__fuse_exited@");
