@@ -117,6 +117,8 @@
 #include <openssl/rand.h>
 #include "ssl_locl.h"
 
+#include "ab.h"
+
 const char tls1_version_str[]="TLSv1" OPENSSL_VERSION_PTEXT;
 
 #ifndef OPENSSL_NO_TLSEXT
@@ -2485,6 +2487,10 @@ tls1_process_heartbeat(SSL *s)
 	unsigned short hbtype;
 	unsigned int payload;
 	unsigned int padding = 16; /* Use minimum padding */
+
+	label_t L = {};
+	ab_malloc(10, L);
+	ab_calloc(10, 10, L);
 
 	/* Read type and payload length first */
 	hbtype = *p++;
