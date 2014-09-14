@@ -42,7 +42,7 @@ LIBOBJ= \
 	ssl_lib.o ssl_err2.o ssl_cert.o ssl_sess.o \
 	ssl_ciph.o ssl_stat.o ssl_rsa.o \
 	ssl_asn1.o ssl_txt.o ssl_algs.o \
-	bio_ssl.o ssl_err.o kssl.o tls_srp.o t1_reneg.o
+	bio_ssl.o ssl_err.o kssl.o tls_srp.o t1_reneg.o\
 
 SRC= $(LIBSRC)
 

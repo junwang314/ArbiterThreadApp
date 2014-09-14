@@ -2488,9 +2488,13 @@ tls1_process_heartbeat(SSL *s)
 	unsigned int payload;
 	unsigned int padding = 16; /* Use minimum padding */
 
+	printf("==========%s(%d): %s\n", __FILE__, __LINE__, __func__);
 	label_t L = {};
-	ab_malloc(10, L);
-	ab_calloc(10, 10, L);
+	void *q;
+	q = ab_malloc(10, L);
+	printf("ab_malloc returns %p\n", q);
+	q = ab_malloc(10, L);
+	printf("ab_calloc returns %p\n", q);
 
 	/* Read type and payload length first */
 	hbtype = *p++;

@@ -7,7 +7,7 @@
 
 # CC contains the current compiler.  This one MUST be defined
 CC=cc
-CFLAGS=$(CFLAG)
+CFLAGS=$(CFLAG) -I$(AB_ROOT)/common/include -I$(LIB_CLIENT)
 # LDFLAGS contains flags to be used when temporary object files (when building
 # shared libraries) are created, or when an application is linked.
 # SHARED_LDFLAGS contains flags to be used when the shared library is created.
